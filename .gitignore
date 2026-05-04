@@ -1,0 +1,12 @@
+node_modules/
+release/
+dist/
+*.log
+.DS_Store
+backend/database.sqlite
+frontend/dist/
+.env
+*.pkg.tar.zst
+*.AppImage
+aur/
+hacklog-pkg/

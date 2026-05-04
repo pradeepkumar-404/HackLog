@@ -1,0 +1,310 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* HackLog — dark terminal/hacker design system. All colors HSL. */
+
+/* Import 0xProto Nerd Font */
+@font-face {
+  font-family: '0xProto Nerd Font';
+  src: url('/fonts/0xProtoNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: '0xProto Nerd Font';
+  src: url('/fonts/0xProtoNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: '0xProto Nerd Font';
+  src: url('/fonts/0xProtoNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: '0xProto Nerd Font';
+  src: url('/fonts/0xProtoNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Default to dark — single mode */
+    --background: 220 18% 6%;
+    --foreground: 140 30% 88%;
+
+    --card: 220 18% 8%;
+    --card-foreground: 140 30% 88%;
+
+    --popover: 220 18% 7%;
+    --popover-foreground: 140 30% 88%;
+
+    --primary: 142 76% 50%;
+    --primary-foreground: 220 25% 5%;
+
+    --primary-glow: 142 90% 60%;
+
+    --secondary: 220 14% 12%;
+    --secondary-foreground: 140 30% 88%;
+
+    --muted: 220 14% 11%;
+    --muted-foreground: 140 8% 55%;
+
+    --accent: 175 80% 45%;
+    --accent-foreground: 220 25% 5%;
+
+    --destructive: 0 80% 58%;
+    --destructive-foreground: 0 0% 98%;
+
+    --warning: 38 95% 58%;
+    --warning-foreground: 220 25% 5%;
+
+    --success: 142 76% 50%;
+    --info: 200 90% 60%;
+
+    --border: 220 14% 14%;
+    --input: 220 14% 12%;
+    --ring: 142 76% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 20% 5%;
+    --sidebar-foreground: 140 20% 75%;
+    --sidebar-primary: 142 76% 50%;
+    --sidebar-primary-foreground: 220 25% 5%;
+    --sidebar-accent: 220 16% 10%;
+    --sidebar-accent-foreground: 142 76% 60%;
+    --sidebar-border: 220 14% 12%;
+    --sidebar-ring: 142 76% 50%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    --gradient-glow: radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.15), transparent 70%);
+    --shadow-glow: 0 0 24px hsl(var(--primary) / 0.25);
+    --shadow-soft: 0 4px 20px hsl(220 25% 2% / 0.5);
+
+    /* Updated font stack - 0xProto Nerd Font as primary */
+    --font-mono: '0xProto Nerd Font', 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+    
+    /* Desktop-specific adjustments */
+    --desktop-scale: 1;
+    --desktop-font-base: 16px;
+    --desktop-font-sm: 14px;
+    --desktop-font-xs: 12px;
+  }
+
+  .dark {
+    /* same as root — app is dark-only */
+    --background: 220 18% 6%;
+    --foreground: 140 30% 88%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+  
+  /* Desktop-specific base font size */
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+    font-size: 1rem;
+    line-height: 1.5;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.08), transparent),
+      linear-gradient(hsl(var(--background)), hsl(var(--background)));
+  }
+  
+  /* Ensure all interactive elements have proper size */
+  input, button, select, textarea {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  
+  /* Minimum touch target size for desktop (still good for mouse) */
+  /* button, 
+  [role="button"],
+  .clickable {
+    min-height: 32px;
+  } */
+
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+
+  /* Custom scrollbar for desktop */
+  ::-webkit-scrollbar { 
+    width: 10px; 
+    height: 10px; 
+  }
+  ::-webkit-scrollbar-track { 
+    background: hsl(var(--background)); 
+  }
+  ::-webkit-scrollbar-thumb { 
+    background: hsl(var(--border)); 
+    border-radius: 8px; 
+  }
+  ::-webkit-scrollbar-thumb:hover { 
+    background: hsl(var(--muted)); 
+  }
+}
+
+@layer components {
+  .font-mono { 
+    font-family: var(--font-mono);
+    font-variant-ligatures: contextual;
+    font-feature-settings: "calt", "ss01", "ss02", "ss03";
+  }
+
+  .terminal-prompt::before {
+    content: "› ";
+    color: hsl(var(--primary));
+    font-family: var(--font-mono);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 12px hsl(var(--primary) / 0.6);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .prose-hack {
+    @apply text-foreground leading-relaxed;
+  }
+  .prose-hack h1 { @apply text-3xl font-bold mt-6 mb-3 text-foreground; }
+  .prose-hack h2 { @apply text-2xl font-semibold mt-5 mb-2 text-foreground; }
+  .prose-hack h3 { @apply text-xl font-semibold mt-4 mb-2 text-foreground; }
+  .prose-hack p { @apply my-3; }
+  .prose-hack ul { @apply list-disc pl-6 my-3; }
+  .prose-hack ol { @apply list-decimal pl-6 my-3; }
+  .prose-hack li { @apply my-1; }
+  .prose-hack a { @apply text-primary underline underline-offset-2 hover:text-primary-glow; }
+  .prose-hack code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded bg-secondary text-accent font-mono text-sm;
+  }
+  .prose-hack pre {
+    @apply rounded-md my-4 overflow-x-auto border border-border;
+  }
+  .prose-hack blockquote {
+    @apply border-l-2 border-primary pl-4 italic text-muted-foreground my-3;
+  }
+  .prose-hack table { @apply w-full border-collapse my-4; }
+  .prose-hack th, .prose-hack td { @apply border border-border px-3 py-2 text-left; }
+  .prose-hack th { @apply bg-secondary; }
+  .prose-hack hr { @apply border-border my-6; }
+}
+
+/* Desktop app specific enhancements */
+@media (display-mode: standalone) {
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+}
+
+/* Better form elements for desktop */
+input, textarea, select {
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+/* Improve button spacing */
+button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Card hover effects for desktop */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Desktop-specific typography improvements */
+@media (min-width: 1024px) {
+  .text-xs {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  
+  .text-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  
+  .text-base {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  
+  .text-lg {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+  
+  .text-xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  
+  .text-2xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  .text-3xl {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+}
+
+/* Custom Title Bar Styles */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Ensure content doesn't overlap with title bar */
+.bg-background {
+  background-color: hsl(var(--background));
+}
+
+/* Smooth transitions for window controls */
+.group {
+  transition: all 0.15s ease;
+}

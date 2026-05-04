@@ -1,0 +1,110 @@
+{
+  "name": "hacklog",
+  "version": "1.0.0",
+  "description": "Bug Bounty Research Tracker - A Notion-style notes and daily research tracker for bug bounty hunters",
+  "homepage": "https://github.com/pradeepkumar-404/hacklog",
+  "author": "HackLog Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepkumar-404/hacklog.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pradeepkumar-404/hacklog/issues"
+  },
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5000/api/health && electron .\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:clean && npm run build:frontend && npm run build:backend && npm run build:electron",
+    "build:clean": "rm -rf frontend/dist backend/node_modules release",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm install --omit=dev",
+    "build:electron": "electron-builder",
+    "build:linux": "npm run build && electron-builder --linux",
+    "build:arch": "npm run build && electron-builder --linux pacman --x64",
+    "build:debian": "npm run build && electron-builder --linux deb",
+    "build:appimage": "npm run build && electron-builder --linux AppImage",
+    "build:all": "npm run build && electron-builder --linux --x64 --arm64",
+    "postinstall": "cd backend && npm install && cd ../frontend && npm install",
+    "kill-port": "fuser -k 5000/tcp 2>/dev/null || true"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.hacklog.app",
+    "productName": "HackLog",
+    "copyright": "Copyright © 2024 HackLog",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "!**/node_modules",
+      "!**/node_modules/**",
+      "!**/.git",
+      "!**/.gitignore",
+      "!**/*.map",
+      "!**/test",
+      "!**/tests",
+      "!**/__tests__",
+      "!**/coverage",
+      "!**/*.md",
+      "!**/.env*",
+      "!**/tsconfig.json",
+      "!**/package-lock.json",
+      "!**/file.txt"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": ["**/*", "!node_modules/**"]
+      },
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/node_modules/sqlite3/**",
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "pacman",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "maintainer": "HackLog <support@hacklog.app>",
+      "description": "Bug Bounty Research Tracker",
+      "synopsis": "Bug Bounty Research Tracker",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "npmRebuild": false,
+    "publish": null,
+    "forceCodeSigning": false
+  }
+}
