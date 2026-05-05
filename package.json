@@ -2,16 +2,9 @@
   "name": "hacklog",
   "version": "1.0.0",
   "description": "Bug Bounty Research Tracker - A Notion-style notes and daily research tracker for bug bounty hunters",
-  "homepage": "https://github.com/pradeepkumar-404/hacklog",
+  "homepage": "https://github.com/pradeepkumar-404/HackLog",
   "author": "HackLog Team",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/pradeepkumar-404/hacklog.git"
-  },
-  "bugs": {
-    "url": "https://github.com/pradeepkumar-404/hacklog/issues"
-  },
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -23,11 +16,8 @@
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm install --omit=dev",
     "build:electron": "electron-builder",
-    "build:linux": "npm run build && electron-builder --linux",
     "build:arch": "npm run build && electron-builder --linux pacman --x64",
-    "build:debian": "npm run build && electron-builder --linux deb",
-    "build:appimage": "npm run build && electron-builder --linux AppImage",
-    "build:all": "npm run build && electron-builder --linux --x64 --arm64",
+    "build:appimage": "npm run build && electron-builder --linux AppImage --x64",
     "postinstall": "cd backend && npm install && cd ../frontend && npm install",
     "kill-port": "fuser -k 5000/tcp 2>/dev/null || true"
   },
@@ -61,8 +51,7 @@
       "!**/*.md",
       "!**/.env*",
       "!**/tsconfig.json",
-      "!**/package-lock.json",
-      "!**/file.txt"
+      "!**/package-lock.json"
     ],
     "extraResources": [
       {
@@ -88,20 +77,44 @@
     "linux": {
       "target": [
         {
-          "target": "AppImage",
+          "target": "pacman",
           "arch": ["x64"]
         },
         {
-          "target": "pacman",
+          "target": "AppImage",
           "arch": ["x64"]
         }
       ],
       "category": "Development",
-      "icon": "build/icon.png",
-      "maintainer": "HackLog <support@hacklog.app>",
-      "description": "Bug Bounty Research Tracker",
+      "icon": "build/icons",
+      "maintainer": "HackLog Team <support@hacklog.app>",
+      "description": "Bug Bounty Research Tracker - Notion-style notes for bug bounty hunters. Organize targets, log recon, and track vulnerabilities.",
       "synopsis": "Bug Bounty Research Tracker",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "Name": "HackLog",
+          "Comment": "Bug Bounty Research Tracker",
+          "Icon": "hacklog",
+          "Type": "Application",
+          "Categories": "Development;Security;",
+          "Keywords": "bugbounty;hacking;security;recon;pentest;",
+          "StartupWMClass": "HackLog"
+        }
+      }
+    },
+    "pacman": {
+      "depends": [
+        "glibc",
+        "gcc-libs",
+        "nss",
+        "libx11",
+        "libxss",
+        "libxtst",
+        "libxkbfile",
+        "libsecret",
+        "alsa-lib"
+      ]
     },
     "npmRebuild": false,
     "publish": null,

@@ -1,12 +1,25 @@
+# Node
 node_modules/
+npm-debug.log
+
+# Build outputs
 release/
 dist/
-*.log
-.DS_Store
-backend/database.sqlite
 frontend/dist/
-.env
-*.pkg.tar.zst
+
+# Electron
 *.AppImage
-aur/
-hacklog-pkg/
+*.pacman
+linux-unpacked/
+
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AUR (keep separate)
+hacklog-bin/
