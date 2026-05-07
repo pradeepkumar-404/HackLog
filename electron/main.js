@@ -71,8 +71,16 @@ function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
     width, height, minWidth: 1024, minHeight: 768,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js'), zoomFactor: DEFAULT_ZOOM_FACTOR },
-    show: false, frame: false, titleBarStyle: 'hidden', backgroundColor: '#0a0d10',
+    webPreferences: { 
+      nodeIntegration: false, 
+      contextIsolation: true, 
+      preload: path.join(__dirname, 'preload.js'), 
+      zoomFactor: DEFAULT_ZOOM_FACTOR 
+    },
+    show: false, 
+    frame: false, 
+    titleBarStyle: 'hidden', 
+    backgroundColor: '#0a0d10',
   });
   mainWindow.maximize();
   mainWindow.loadURL('data:text/html,<html><body style="background:#0a0d10;color:#e5e7eb;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h2 style="color:#22c55e">HackLog</h2><p>Starting...</p></div></body></html>');
@@ -93,7 +101,21 @@ Menu.setApplicationMenu(Menu.buildFromTemplate([
   { label: 'View', submenu: [{ label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => mainWindow?.reload() }, { label: 'DevTools', accelerator: 'F12', click: () => mainWindow?.webContents.toggleDevTools() }] }
 ]));
 
-app.whenReady().then(async () => { app.setName('HackLog'); createWindow(); await startBackend(); });
-app.on('window-all-closed', () => { if (backendProcess && !backendProcess.killed) backendProcess.kill(); if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { if (backendProcess && !backendProcess.killed) backendProcess.kill(); });
-app.on('activate', () => { if (!mainWindow) createWindow(); });
+app.whenReady().then(async () => { 
+  app.setName('HackLog'); 
+  createWindow(); 
+  await startBackend(); 
+});
+
+app.on('window-all-closed', () => { 
+  if (backendProcess && !backendProcess.killed) backendProcess.kill(); 
+  if (process.platform !== 'darwin') app.quit(); 
+});
+
+app.on('before-quit', () => { 
+  if (backendProcess && !backendProcess.killed) backendProcess.kill(); 
+});
+
+app.on('activate', () => { 
+  if (!mainWindow) createWindow(); 
+});

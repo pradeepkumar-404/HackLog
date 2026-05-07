@@ -67,17 +67,12 @@ export const AppLayout = () => {
       checkMaximized();
 
       // Listen for state changes - only if ipcRenderer is available
-      try {
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.on('window-state-changed', (_event: any, state: { isMaximized: boolean }) => {
-          setIsMaximized(state.isMaximized);
-        });
-
-        return () => {
-          ipcRenderer.removeAllListeners('window-state-changed');
-        };
-      } catch (e) {
-        console.error('Failed to setup IPC listener:', e);
+      if (window.electronAPI?.onWindowStateChanged) {
+        window.electronAPI.onWindowStateChanged(
+          (state: { isMaximized: boolean }) => {
+            setIsMaximized(state.isMaximized);
+          }
+        );
       }
     }
   }, [isElectron]);

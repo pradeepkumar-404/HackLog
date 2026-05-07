@@ -18,6 +18,8 @@ import noteLinkRoutes from './routes/noteLinkRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
 import statsRoutes from './routes/statsRoutes.js';
+import backupRoutes from './routes/backupRoutes.js';
+
 
 dotenv.config();
 
@@ -59,6 +61,8 @@ app.use('/api/note-links', noteLinkRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/backup', backupRoutes);
+
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -67,10 +71,28 @@ app.get('/api/health', (req, res) => {
 
 // ========== SPA FALLBACK (MUST BE LAST) ==========
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  app.get('*', (req, res, next) => {
+
+    // Skip API
+    if (req.path.startsWith('/api')) {
+      return next();
     }
+
+    // Skip assets
+    if (
+      req.path.startsWith('/assets/') ||
+      req.path.endsWith('.js') ||
+      req.path.endsWith('.css') ||
+      req.path.endsWith('.png') ||
+      req.path.endsWith('.svg') ||
+      req.path.endsWith('.ico')
+    ) {
+      return next();
+    }
+
+    res.sendFile(
+      path.join(__dirname, '..', 'frontend', 'dist', 'index.html')
+    );
   });
 }
 // =================================================

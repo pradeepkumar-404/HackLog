@@ -23,6 +23,16 @@ export const workspacesApi = {
   delete: (id: string) => api.delete(`/workspaces/${id}`),
 };
 
+// Backup & Import/Export
+export const backupApi = {
+  exportWorkspace: (workspaceId: string) => 
+    api.get(`/backup/workspace/${workspaceId}/export`, { responseType: 'blob' }),
+  importWorkspace: (data: any, workspaceName: string) => 
+    api.post('/backup/workspace/import', { data, workspaceName }),
+  getBackupInfo: (workspaceId: string) => 
+    api.get(`/backup/workspace/${workspaceId}/backup-info`),
+};
+
 // Projects (include workspaceId)
 export const projectsApi = {
   getAll: () => api.get("/projects"),
@@ -99,7 +109,7 @@ export const exportApi = {
     api.get(`/export/project/${projectId}/markdown`, { responseType: "blob" }),
 };
 
-// ✅ ADD THIS - Stats API (Global Dashboard)
+// Stats API (Global Dashboard)
 export const statsApi = {
   getWorkspaceStats: (workspaceId: string) => api.get(`/stats/workspace/${workspaceId}`),
   getWorkspaceRecent: (workspaceId: string) => api.get(`/stats/workspace/${workspaceId}/recent`),

@@ -10,6 +10,7 @@ frontend/dist/
 # Electron
 *.AppImage
 *.pacman
+*.deb
 linux-unpacked/
 
 

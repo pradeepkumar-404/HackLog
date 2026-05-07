@@ -13,7 +13,10 @@ import SearchPage from "./pages/SearchPage";
 import TimelinePage from "./pages/TimelinePage";
 import NotFound from "./pages/NotFound.tsx";
 
+import { useEffect } from "react";
+
 const queryClient = new QueryClient();
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

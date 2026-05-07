@@ -1,3 +1,431 @@
+===== ===== backend ===== =====
+===== backend/.env =====
+PORT=5000
+DB_STORAGE=./database.sqlite
+===== backend/config/db.js =====
+import { Sequelize } from 'sequelize';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: process.env.DB_STORAGE || './database.sqlite',
+  logging: false,
+  define: {
+    timestamps: true,
+    underscored: true,
+  }
+});
+
+export const connectDB = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ SQLite connected');
+    await sequelize.sync({ alter: false });
+    console.log('✅ Database synced');
+  } catch (error) {
+    console.error('❌ DB connection error:', error);
+    process.exit(1);
+  }
+};
+
+export default sequelize;
+===== backend/models/CalendarLog.js =====
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Project from './Project.js';
+
+const CalendarLog = sequelize.define('CalendarLog', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  date: {
+    type: DataTypes.STRING,    // YYYY-MM-DD
+    allowNull: false
+    // REMOVED: unique: true
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  cookies: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  headers: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: Project,
+      key: 'id'
+    },
+    onDelete: 'SET NULL',
+    field: 'project_id'  // Explicitly map to snake_case column
+  },
+  projectName: {
+    type: DataTypes.STRING,
+    defaultValue: '',
+    field: 'project_name'  // Explicitly map to snake_case column
+  },
+  findings: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  vulnerabilities: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  status: {
+    type: DataTypes.ENUM('no_progress', 'testing', 'findings', 'vulnerability'),
+    defaultValue: 'no_progress'
+  }
+}, {
+  tableName: 'calendar_logs',
+  indexes: [
+    {
+      unique: true,
+      fields: ['date', 'project_id']  // Use snake_case column name
+    }
+  ]
+});
+
+Project.hasMany(CalendarLog, { foreignKey: 'projectId' });
+CalendarLog.belongsTo(Project, { foreignKey: 'projectId' });
+
+export default CalendarLog;
+===== backend/models/Note.js =====
+// backend/models/Note.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Project from './Project.js';
+
+const Note = sequelize.define('Note', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    trim: true
+  },
+  content: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  tags: {
+    type: DataTypes.JSON,        // store array of strings as JSON
+    defaultValue: []
+  },
+  attachments: {
+    type: DataTypes.JSON,        // store array of attachment objects
+    defaultValue: []
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Project,
+      key: 'id'
+    },
+    onDelete: 'CASCADE'
+  }
+}, {
+  tableName: 'notes'
+});
+
+Project.hasMany(Note, { foreignKey: 'projectId' });
+Note.belongsTo(Project, { foreignKey: 'projectId' });
+
+export default Note;
+===== backend/models/NoteLink.js =====
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Note from './Note.js';
+
+const NoteLink = sequelize.define('NoteLink', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  fromNoteId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Note,
+      key: 'id'
+    },
+    onDelete: 'CASCADE',
+    field: 'from_note_id'   // map to actual snake_case column
+  },
+  toNoteId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Note,
+      key: 'id'
+    },
+    onDelete: 'CASCADE',
+    field: 'to_note_id'     // map to actual snake_case column
+  }
+}, {
+  tableName: 'note_links',
+  indexes: [
+    {
+      unique: true,
+      fields: ['from_note_id', 'to_note_id']   // use actual column names
+    }
+  ]
+});
+
+export default NoteLink;
+===== backend/models/Payload.js =====
+// backend/models/Payload.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Project from './Project.js';
+
+const Payload = sequelize.define('Payload', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  category: {
+    type: DataTypes.ENUM('XSS', 'SQLi', 'SSRF', 'LFI', 'RCE', 'IDOR', 'Other'),
+    allowNull: false
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  description: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: Project,
+      key: 'id'
+    },
+    onDelete: 'SET NULL'
+  }
+}, {
+  tableName: 'payloads'
+});
+
+Project.hasMany(Payload, { foreignKey: 'projectId' });
+Payload.belongsTo(Project, { foreignKey: 'projectId' });
+
+export default Payload;
+===== backend/models/Project.js =====
+// backend/models/Project.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Workspace from './Workspace.js';
+
+const Project = sequelize.define('Project', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    trim: true
+  },
+  target: {
+    type: DataTypes.STRING,
+    defaultValue: ''
+  },
+  scope: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  programInfo: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  workspaceId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Workspace,
+      key: 'id'
+    },
+    onDelete: 'CASCADE'
+  }
+}, {
+  tableName: 'projects'
+});
+
+Workspace.hasMany(Project, { foreignKey: 'workspaceId' });
+Project.belongsTo(Workspace, { foreignKey: 'workspaceId' });
+
+export default Project;
+===== backend/models/ReconData.js =====
+// backend/models/ReconData.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Project from './Project.js';
+
+const ReconData = sequelize.define('ReconData', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  type: {
+    type: DataTypes.ENUM('subdomain', 'url', 'parameter', 'endpoint'),
+    allowNull: false
+  },
+  value: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  source: {
+    type: DataTypes.STRING,
+    defaultValue: ''
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Project,
+      key: 'id'
+    },
+    onDelete: 'CASCADE'
+  }
+}, {
+  tableName: 'recon_data'
+});
+
+Project.hasMany(ReconData, { foreignKey: 'projectId' });
+ReconData.belongsTo(Project, { foreignKey: 'projectId' });
+
+export default ReconData;
+===== backend/models/Template.js =====
+// backend/models/Template.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+
+const Template = sequelize.define('Template', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  tags: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  type: {
+    type: DataTypes.STRING,
+    defaultValue: 'note'
+  }
+}, {
+  tableName: 'templates'
+});
+
+export default Template;
+===== backend/models/Vulnerability.js =====
+// backend/models/Vulnerability.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+import Project from './Project.js';
+
+const Vulnerability = sequelize.define('Vulnerability', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  target: {
+    type: DataTypes.STRING,
+    defaultValue: ''
+  },
+  severity: {
+    type: DataTypes.ENUM('Low', 'Medium', 'High', 'Critical'),
+    defaultValue: 'Medium'
+  },
+  status: {
+    type: DataTypes.ENUM('Open', 'Reported', 'Accepted', 'Paid', 'Closed'),
+    defaultValue: 'Open'
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  poc: {
+    type: DataTypes.TEXT,
+    defaultValue: ''
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Project,
+      key: 'id'
+    },
+    onDelete: 'CASCADE'
+  }
+}, {
+  tableName: 'vulnerabilities'
+});
+
+Project.hasMany(Vulnerability, { foreignKey: 'projectId' });
+Vulnerability.belongsTo(Project, { foreignKey: 'projectId' });
+
+export default Vulnerability;
+===== backend/models/Workspace.js =====
+// backend/models/Workspace.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
+
+const Workspace = sequelize.define('Workspace', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    trim: true
+  }
+}, {
+  tableName: 'workspaces'
+});
+
+export default Workspace;
+===== backend/package-lock.json =====
 {
   "name": "research-hub-backend",
   "version": "1.0.0",
@@ -46,9 +474,9 @@
       "license": "MIT"
     },
     "node_modules/@types/node": {
-      "version": "25.6.1",
-      "resolved": "https://registry.npmjs.org/@types/node/-/node-25.6.1.tgz",
-      "integrity": "sha512-coJCN8O1q4AGyyqCAUSP06P+SrMTu18BkEj3NVAK07q6QUneD2wzj3CLv9+yP+BMeZQlMvneXqqvDe3w+xcq7g==",
+      "version": "25.6.0",
+      "resolved": "https://registry.npmjs.org/@types/node/-/node-25.6.0.tgz",
+      "integrity": "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==",
       "license": "MIT",
       "dependencies": {
         "undici-types": "~7.19.0"
@@ -1136,9 +1564,9 @@
       }
     },
     "node_modules/node-abi": {
-      "version": "3.92.0",
-      "resolved": "https://registry.npmjs.org/node-abi/-/node-abi-3.92.0.tgz",
-      "integrity": "sha512-KdHvFWZjEKDf0cakgFjebl371GPsISX2oZHcuyKqM7DtogIsHrqKeLTo8wBHxaXRAQlY2PsPlZmfo+9ZCxEREQ==",
+      "version": "3.90.0",
+      "resolved": "https://registry.npmjs.org/node-abi/-/node-abi-3.90.0.tgz",
+      "integrity": "sha512-pZNQT7UnYlMwMBy5N1lV5X/YLTbZM5ncytN3xL7CHEzhDN8uVe0u55yaPUJICIJjaCW8NrM5BFdqr7HLweStNA==",
       "license": "MIT",
       "dependencies": {
         "semver": "^7.3.5"
@@ -1872,9 +2300,9 @@
       }
     },
     "node_modules/tar": {
-      "version": "7.5.15",
-      "resolved": "https://registry.npmjs.org/tar/-/tar-7.5.15.tgz",
-      "integrity": "sha512-dzGK0boVlC4W5QFuQN1EFSl3bIDYsk7Tj40U6eIBnK2k/8ml7TZ5agbI5j5+qnoVcAA+rNtBml8SEiLxZpNqRQ==",
+      "version": "7.5.14",
+      "resolved": "https://registry.npmjs.org/tar/-/tar-7.5.14.tgz",
+      "integrity": "sha512-/7sHKgQO3JLP9ESlwTYUUftHUadOURUqq23xs1vjcnp8Vss6k0wCfzulyEtk5g91pjvnuriimGlyG7k6msrzRw==",
       "license": "BlueOak-1.0.0",
       "dependencies": {
         "@isaacs/fs-minipass": "^4.0.0",
@@ -2149,3 +2577,1256 @@
     }
   }
 }
+
+===== backend/package.json =====
+{
+  "name": "research-hub-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SQLite backend for Research Hub",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.1",
+    "sequelize": "^6.37.5",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
+
+===== backend/routes/calendarLogRoutes.js =====
+import express from 'express';
+import CalendarLog from '../models/CalendarLog.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/', async (req, res) => {
+  try {
+    const logs = await CalendarLog.findAll({ order: [['date', 'ASC']] });
+    res.json(logs.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:date', async (req, res) => {
+  try {
+    const log = await CalendarLog.findOne({ where: { date: req.params.date } });
+    res.json(log ? withId(log) : null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const { date, notes, cookies, headers, projectId, projectName, findings, vulnerabilities, status } = req.body;
+    const [log, created] = await CalendarLog.upsert({
+      date,
+      notes,
+      cookies,
+      headers,
+      projectId,
+      projectName,
+      findings,
+      vulnerabilities,
+      status,
+    });
+    res.json(withId(log));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:date', async (req, res) => {
+  try {
+    await CalendarLog.destroy({ where: { date: req.params.date } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/exportRoutes.js =====
+import express from 'express';
+import Note from '../models/Note.js';
+import Vulnerability from '../models/Vulnerability.js';
+import Project from '../models/Project.js';
+
+const router = express.Router();
+
+router.get('/project/:projectId/markdown', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await Project.findByPk(projectId);
+    const notes = await Note.findAll({ where: { projectId } });
+    const vulns = await Vulnerability.findAll({ where: { projectId } });
+
+    let md = `# ${project.name}\n\n## Notes\n\n`;
+    for (const note of notes) {
+      md += `### ${note.name}\n${note.content}\n\n`;
+    }
+    md += `## Vulnerabilities\n\n`;
+    for (const v of vulns) {
+      md += `- **${v.title}** (${v.severity}) – ${v.status}\n  ${v.notes}\n  PoC: ${v.poc}\n\n`;
+    }
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="${project.name}.md"`);
+    res.send(md);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/noteLinkRoutes.js =====
+import express from 'express';
+import NoteLink from '../models/NoteLink.js';
+import Note from '../models/Note.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/backlinks/:noteId', async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const links = await NoteLink.findAll({
+      where: { toNoteId: noteId },
+      include: [{ model: Note, as: 'fromNote', attributes: ['id', 'name'] }],
+    });
+    const backlinks = links.map(link => ({
+      _id: link.fromNote.id,
+      id: link.fromNote.id,
+      name: link.fromNote.name,
+    }));
+    res.json(backlinks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const { fromNoteId, toNoteId } = req.body;
+    const existing = await NoteLink.findOne({ where: { fromNoteId, toNoteId } });
+    if (existing) return res.status(409).json({ error: 'Link already exists' });
+    const link = await NoteLink.create({ fromNoteId, toNoteId });
+    res.json(withId(link));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/', async (req, res) => {
+  try {
+    const { fromNoteId, toNoteId } = req.body;
+    await NoteLink.destroy({ where: { fromNoteId, toNoteId } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/noteRoutes.js =====
+import express from 'express';
+import Note from '../models/Note.js';
+import { logActivity } from '../utils/activityLogger.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/project/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const notes = await Note.findAll({
+      where: { projectId },
+      order: [['updatedAt', 'DESC']],
+    });
+    res.json(notes.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+router.get('/:id', async (req, res) => {
+  try {
+    const note = await Note.findByPk(req.params.id);
+    if (!note) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+    // Return single object, not array
+    res.json(withId(note));
+  } catch (err) {
+    console.error('Error fetching note:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const { projectId, name, content, tags, attachments } = req.body;
+    if (!projectId || !name) {
+      return res.status(400).json({ error: 'projectId and name required' });
+    }
+    const note = await Note.create({
+      projectId,
+      name,
+      content: content || '',
+      tags: tags || [],
+      attachments: attachments || [],
+    });
+    await logActivity(projectId, 'note_created', `"${name}" created`);
+    res.json(withId(note));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:projectId/:id', async (req, res) => {
+  try {
+    const { id, projectId } = req.params;
+    const { content, tags, name, attachments } = req.body;
+
+    const note = await Note.findByPk(id);
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+
+    const oldName = note.name;
+    await note.update({ content, tags, name, attachments });
+
+    if (oldName !== name) {
+      await logActivity(projectId, 'note_updated', `"${oldName}" renamed to "${name}"`);
+    } else {
+      await logActivity(projectId, 'note_updated', `"${name}" updated`);
+    }
+
+    res.json(withId(note));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:projectId/:id', async (req, res) => {
+  try {
+    const { id, projectId } = req.params;
+    
+    // Add validation
+    if (!id || !projectId) {
+      return res.status(400).json({ error: 'Missing noteId or projectId' });
+    }
+    
+    const note = await Note.findByPk(id);
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+
+    await note.destroy();
+    await logActivity(projectId, 'note_deleted', `"${note.name}" deleted`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/payloadRoutes.js =====
+import express from 'express';
+import { Op } from 'sequelize';
+import Payload from '../models/Payload.js';
+import { logActivity } from '../utils/activityLogger.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const where = { [Op.or]: [{ projectId: null }] };
+    if (projectId) where[Op.or].push({ projectId });
+    const payloads = await Payload.findAll({
+      where,
+      order: [['category', 'ASC'], ['name', 'ASC']],
+    });
+    res.json(payloads.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const payload = await Payload.findByPk(req.params.id);
+    if (!payload) return res.status(404).json({ error: 'Not found' });
+    res.json(withId(payload));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const payload = await Payload.create(req.body);
+    if (payload.projectId) {
+      await logActivity(payload.projectId, 'payload_created', `"${payload.name}" (${payload.category})`);
+    }
+    res.json(withId(payload));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const payload = await Payload.findByPk(req.params.id);
+    if (!payload) return res.status(404).json({ error: 'Not found' });
+
+    const oldCategory = payload.category;
+    await payload.update(req.body);
+
+    if (payload.projectId) {
+      let details = `"${payload.name}" updated`;
+      if (oldCategory !== payload.category) {
+        details = `"${payload.name}" category changed from ${oldCategory} to ${payload.category}`;
+      }
+      await logActivity(payload.projectId, 'payload_updated', details);
+    }
+    res.json(withId(payload));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const payload = await Payload.findByPk(req.params.id);
+    if (!payload) return res.status(404).json({ error: 'Not found' });
+    const projectId = payload.projectId;
+    const name = payload.name;
+    await payload.destroy();
+    if (projectId) {
+      await logActivity(projectId, 'payload_deleted', `"${name}" deleted`);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/projectRoutes.js =====
+import express from 'express';
+import Project from '../models/Project.js';
+import Note from '../models/Note.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/', async (req, res) => {
+  try {
+    const projects = await Project.findAll({ order: [['createdAt', 'DESC']] });
+    res.json(projects.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const project = await Project.findByPk(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    res.json(withId(project));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const { name, target, scope, programInfo, workspaceId } = req.body;
+    if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required' });
+    const project = await Project.create({ name, target, scope, programInfo, workspaceId });
+    res.json(withId(project));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const project = await Project.findByPk(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    await project.update(req.body);
+    res.json(withId(project));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const project = await Project.findByPk(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    await Note.destroy({ where: { projectId: req.params.id } });
+    await project.destroy();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/reconRoutes.js =====
+import express from 'express';
+import ReconData from '../models/ReconData.js';
+import { logActivity } from '../utils/activityLogger.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/project/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const data = await ReconData.findAll({
+      where: { projectId },
+      order: [['type', 'ASC'], ['value', 'ASC']],
+    });
+    res.json(data.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const recon = await ReconData.findByPk(req.params.id);
+    if (!recon) return res.status(404).json({ error: 'Not found' });
+    res.json(withId(recon));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const entry = await ReconData.create(req.body);
+    await logActivity(entry.projectId, 'recon_created', `${entry.type}: "${entry.value}"`);
+    res.json(withId(entry));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const entry = await ReconData.findByPk(req.params.id);
+    if (!entry) return res.status(404).json({ error: 'Not found' });
+    const oldValue = entry.value;
+    await entry.update(req.body);
+    if (oldValue !== entry.value) {
+      await logActivity(entry.projectId, 'recon_updated', `${entry.type}: "${oldValue}" → "${entry.value}"`);
+    } else {
+      await logActivity(entry.projectId, 'recon_updated', `${entry.type}: "${entry.value}" updated`);
+    }
+    res.json(withId(entry));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const entry = await ReconData.findByPk(req.params.id);
+    if (!entry) return res.status(404).json({ error: 'Not found' });
+    const projectId = entry.projectId;
+    const desc = `${entry.type}: "${entry.value}"`;
+    await entry.destroy();
+    await logActivity(projectId, 'recon_deleted', `${desc} deleted`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/searchRoutes.js =====
+import express from 'express';
+import { Op } from 'sequelize';
+import Note from '../models/Note.js';
+import CalendarLog from '../models/CalendarLog.js';
+import Project from '../models/Project.js';
+
+const router = express.Router();
+
+const withId = (obj, extra = {}) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id, ...extra });
+
+router.get('/', async (req, res) => {
+  try {
+    const query = req.query.q?.toLowerCase() || '';
+    const type = req.query.type || 'all';
+
+    let results = [];
+
+    if (type === 'all' || type === 'notes') {
+      const notes = await Note.findAll({
+        where: {
+          [Op.or]: [
+            { name: { [Op.like]: `%${query}%` } },
+            { content: { [Op.like]: `%${query}%` } },
+            { tags: { [Op.like]: `%${query}%` } }, // JSON field – might need different handling; simple text search works in SQLite
+          ],
+        },
+        include: [{ model: Project, attributes: ['name'] }],
+      });
+      results.push(
+        ...notes.map((n) =>
+          withId(n, {
+            type: 'note',
+            projectName: n.Project?.name || '',
+          })
+        )
+      );
+    }
+
+    if (type === 'all' || type === 'calendar') {
+      const logs = await CalendarLog.findAll({
+        where: {
+          [Op.or]: [
+            { notes: { [Op.like]: `%${query}%` } },
+            { findings: { [Op.like]: `%${query}%` } },
+            { vulnerabilities: { [Op.like]: `%${query}%` } },
+            { projectName: { [Op.like]: `%${query}%` } },
+          ],
+        },
+      });
+      results.push(...logs.map((l) => withId(l, { type: 'calendar' })));
+    }
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/statsRoutes.js =====
+import express from 'express';
+import { Op } from 'sequelize';
+import Project from '../models/Project.js';
+import Note from '../models/Note.js';
+import Vulnerability from '../models/Vulnerability.js';
+import Payload from '../models/Payload.js';
+import ReconData from '../models/ReconData.js';
+import CalendarLog from '../models/CalendarLog.js';
+
+const router = express.Router();
+
+router.get('/workspace/:workspaceId', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+
+    const projects = await Project.findAll({ where: { workspaceId } });
+    const projectIds = projects.map(p => p.id);
+
+    const [targets, notes, vulns, payloads, recon, logs] = await Promise.all([
+      Project.count({ where: { workspaceId } }),
+      Note.count({ where: { projectId: projectIds } }),
+      Vulnerability.count({ where: { projectId: projectIds } }),
+      Payload.count({ where: { projectId: projectIds } }),
+      ReconData.count({ where: { projectId: projectIds } }),
+      CalendarLog.count({ where: { projectId: projectIds } }),
+    ]);
+
+    const activeVulns = await Vulnerability.count({
+      where: {
+        projectId: projectIds,
+        status: { [Op.notIn]: ['Closed', 'Paid'] },
+      },
+    });
+
+    const activeLogs = await CalendarLog.count({
+      where: {
+        projectId: projectIds,
+        status: { [Op.in]: ['testing', 'findings', 'vulnerability'] },
+      },
+    });
+
+    res.json({
+      targets,
+      notes,
+      vulnerabilities: vulns,
+      activeVulns,
+      payloads,
+      recon,
+      calendarLogs: logs,
+      activeLogs,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/workspace/:workspaceId/recent', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+
+    const projects = await Project.findAll({ where: { workspaceId } });
+    const projectIds = projects.map(p => p.id);
+
+    const notes = await Note.findAll({
+      where: { projectId: projectIds },
+      order: [['createdAt', 'DESC']],
+      limit: 5,
+      include: [{ model: Project, attributes: ['name'] }],
+    });
+
+    const vulnerabilities = await Vulnerability.findAll({
+      where: { projectId: projectIds },
+      order: [['createdAt', 'DESC']],
+      limit: 5,
+      include: [{ model: Project, attributes: ['name'] }],
+    });
+
+    const logs = await CalendarLog.findAll({
+      where: { projectId: projectIds },
+      order: [['updatedAt', 'DESC']],
+      limit: 5,
+    });
+
+    const format = (item, projectField = 'Project') => {
+      const obj = item.toJSON();
+      obj.projectId = obj.projectId ? { _id: obj.projectId, name: obj[projectField]?.name || '' } : null;
+      return obj;
+    };
+
+    res.json({
+      notes: notes.map(n => format(n, 'Project')),
+      vulnerabilities: vulnerabilities.map(v => format(v, 'Project')),
+      logs: logs.map(l => format(l)),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/templateRoutes.js =====
+import express from 'express';
+import Template from '../models/Template.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/', async (req, res) => {
+  try {
+    const templates = await Template.findAll({ order: [['name', 'ASC']] });
+    res.json(templates.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const template = await Template.create(req.body);
+    res.json(withId(template));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    await Template.destroy({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/vulnerabilityRoutes.js =====
+import express from 'express';
+import Vulnerability from '../models/Vulnerability.js';
+import { logActivity } from '../utils/activityLogger.js';
+
+const router = express.Router();
+
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/project/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const vulns = await Vulnerability.findAll({
+      where: { projectId },
+      order: [['createdAt', 'DESC']],
+    });
+    res.json(vulns.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const vuln = await Vulnerability.create(req.body);
+    await logActivity(vuln.projectId, 'vulnerability_created', `"${vuln.title}" (${vuln.severity})`);
+    res.json(withId(vuln));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const vuln = await Vulnerability.findByPk(req.params.id);
+    if (!vuln) return res.status(404).json({ error: 'Not found' });
+    res.json(withId(vuln));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const vuln = await Vulnerability.findByPk(req.params.id);
+    if (!vuln) return res.status(404).json({ error: 'Not found' });
+
+    const old = { status: vuln.status, severity: vuln.severity };
+    await vuln.update(req.body);
+
+    let details = `"${vuln.title}" updated`;
+    if (old.status !== vuln.status) {
+      details = `"${vuln.title}" status changed from ${old.status} to ${vuln.status}`;
+    } else if (old.severity !== vuln.severity) {
+      details = `"${vuln.title}" severity changed from ${old.severity} to ${vuln.severity}`;
+    }
+    await logActivity(vuln.projectId, 'vulnerability_updated', details);
+
+    res.json(withId(vuln));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const vuln = await Vulnerability.findByPk(req.params.id);
+    if (!vuln) return res.status(404).json({ error: 'Not found' });
+    const projectId = vuln.projectId;
+    const title = vuln.title;
+    await vuln.destroy();
+    await logActivity(projectId, 'vulnerability_deleted', `"${title}" deleted`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/workspaceRoutes.js =====
+import express from 'express';
+import Workspace from '../models/Workspace.js';
+import Project from '../models/Project.js';
+import Note from '../models/Note.js';
+
+const router = express.Router();
+
+// Helper to add _id field for frontend compatibility
+const withId = (obj) => ({ ...obj.toJSON(), id: obj.id, _id: obj.id });
+
+router.get('/', async (req, res) => {
+  try {
+    const workspaces = await Workspace.findAll({ order: [['createdAt', 'DESC']] });
+    res.json(workspaces.map(withId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const workspace = await Workspace.findByPk(req.params.id);
+    if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
+    res.json(withId(workspace));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const workspace = await Workspace.create({ name: req.body.name });
+    res.json(withId(workspace));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const workspace = await Workspace.findByPk(req.params.id);
+    if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
+    workspace.name = req.body.name;
+    await workspace.save();
+    res.json(withId(workspace));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const workspace = await Workspace.findByPk(req.params.id);
+    if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
+
+    const projects = await Project.findAll({ where: { workspaceId: req.params.id } });
+    const projectIds = projects.map(p => p.id);
+
+    await Note.destroy({ where: { projectId: projectIds } });
+    await Project.destroy({ where: { workspaceId: req.params.id } });
+    await workspace.destroy();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/routes/backupRoutes.js =====
+import express from 'express';
+import Workspace from '../models/Workspace.js';
+import Project from '../models/Project.js';
+import Note from '../models/Note.js';
+import Vulnerability from '../models/Vulnerability.js';
+import Payload from '../models/Payload.js';
+import ReconData from '../models/ReconData.js';
+import CalendarLog from '../models/CalendarLog.js';
+
+const router = express.Router();
+
+// Export workspace data
+router.get('/workspace/:workspaceId/export', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    
+    // Get workspace
+    const workspace = await Workspace.findByPk(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+    
+    // Get all projects in workspace
+    const projects = await Project.findAll({ where: { workspaceId } });
+    const projectIds = projects.map(p => p.id);
+    
+    // Get all related data
+    const notes = await Note.findAll({ where: { projectId: projectIds } });
+    const vulnerabilities = await Vulnerability.findAll({ where: { projectId: projectIds } });
+    const payloads = await Payload.findAll({ where: { projectId: projectIds } });
+    const reconData = await ReconData.findAll({ where: { projectId: projectIds } });
+    const calendarLogs = await CalendarLog.findAll({ where: { projectId: projectIds } });
+    
+    // Create export object
+    const exportData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      workspace: workspace.toJSON(),
+      projects: projects.map(p => p.toJSON()),
+      notes: notes.map(n => n.toJSON()),
+      vulnerabilities: vulnerabilities.map(v => v.toJSON()),
+      payloads: payloads.map(p => p.toJSON()),
+      reconData: reconData.map(r => r.toJSON()),
+      calendarLogs: calendarLogs.map(c => c.toJSON()),
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="workspace_${workspace.name}_backup.json"`);
+    res.json(exportData);
+  } catch (err) {
+    console.error('Export error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import workspace data
+router.post('/workspace/import', async (req, res) => {
+  try {
+    const { data, workspaceName } = req.body;
+    
+    if (!data || !workspaceName) {
+      return res.status(400).json({ error: 'Missing data or workspace name' });
+    }
+    
+    // Check if workspace already exists
+    const existingWorkspace = await Workspace.findOne({ where: { name: workspaceName } });
+    if (existingWorkspace) {
+      return res.status(409).json({ 
+        error: 'Workspace already exists', 
+        existingId: existingWorkspace.id 
+      });
+    }
+    
+    // Parse backup data if it's a string
+    const backup = typeof data === 'string' ? JSON.parse(data) : data;
+    
+    // Create new workspace
+    const newWorkspace = await Workspace.create({ name: workspaceName });
+    
+    // Map old IDs to new IDs for relationships
+    const projectIdMap = new Map();
+    
+    // Import projects
+    for (const project of backup.projects || []) {
+      const newProject = await Project.create({
+        name: project.name,
+        target: project.target || '',
+        scope: project.scope || '',
+        programInfo: project.programInfo || '',
+        workspaceId: newWorkspace.id,
+      });
+      projectIdMap.set(project.id, newProject.id);
+    }
+    
+    // Import notes
+    for (const note of backup.notes || []) {
+      const newProjectId = projectIdMap.get(note.projectId);
+      if (newProjectId) {
+        await Note.create({
+          name: note.name,
+          content: note.content || '',
+          tags: note.tags || [],
+          attachments: note.attachments || [],
+          projectId: newProjectId,
+        });
+      }
+    }
+    
+    // Import vulnerabilities
+    for (const vuln of backup.vulnerabilities || []) {
+      const newProjectId = projectIdMap.get(vuln.projectId);
+      if (newProjectId) {
+        await Vulnerability.create({
+          title: vuln.title,
+          target: vuln.target || '',
+          severity: vuln.severity || 'Medium',
+          status: vuln.status || 'Open',
+          notes: vuln.notes || '',
+          poc: vuln.poc || '',
+          projectId: newProjectId,
+        });
+      }
+    }
+    
+    // Import payloads
+    for (const payload of backup.payloads || []) {
+      const newProjectId = projectIdMap.get(payload.projectId);
+      if (newProjectId) {
+        await Payload.create({
+          name: payload.name,
+          category: payload.category || 'Other',
+          content: payload.content || '',
+          description: payload.description || '',
+          projectId: newProjectId,
+        });
+      } else if (!payload.projectId) {
+        // Global payload (not associated with specific project)
+        await Payload.create({
+          name: payload.name,
+          category: payload.category || 'Other',
+          content: payload.content || '',
+          description: payload.description || '',
+          projectId: null,
+        });
+      }
+    }
+    
+    // Import recon data
+    for (const recon of backup.reconData || []) {
+      const newProjectId = projectIdMap.get(recon.projectId);
+      if (newProjectId) {
+        await ReconData.create({
+          type: recon.type,
+          value: recon.value,
+          source: recon.source || '',
+          projectId: newProjectId,
+        });
+      }
+    }
+    
+    // Import calendar logs - handle duplicates with findOrCreate
+    for (const log of backup.calendarLogs || []) {
+      const newProjectId = log.projectId ? projectIdMap.get(log.projectId) : null;
+      
+      // Use findOrCreate to avoid unique constraint errors
+      const [calendarLog, created] = await CalendarLog.findOrCreate({
+        where: { 
+          date: log.date,
+          projectId: newProjectId
+        },
+        defaults: {
+          date: log.date,
+          notes: log.notes || '',
+          cookies: log.cookies || '',
+          headers: log.headers || '',
+          projectId: newProjectId,
+          projectName: log.projectName || '',
+          findings: log.findings || '',
+          vulnerabilities: log.vulnerabilities || '',
+          status: log.status || 'no_progress',
+        }
+      });
+      
+      if (!created) {
+        // Update existing log with merged data
+        await calendarLog.update({
+          notes: calendarLog.notes || log.notes || '',
+          cookies: calendarLog.cookies || log.cookies || '',
+          headers: calendarLog.headers || log.headers || '',
+          findings: calendarLog.findings || log.findings || '',
+          vulnerabilities: calendarLog.vulnerabilities || log.vulnerabilities || '',
+          status: log.status || calendarLog.status || 'no_progress',
+        });
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      workspaceId: newWorkspace.id,
+      workspaceName: newWorkspace.name,
+      stats: {
+        projects: projectIdMap.size,
+        notes: backup.notes?.length || 0,
+        vulnerabilities: backup.vulnerabilities?.length || 0,
+        payloads: backup.payloads?.length || 0,
+        recon: backup.reconData?.length || 0,
+        logs: backup.calendarLogs?.length || 0,
+      }
+    });
+  } catch (err) {
+    console.error('Import error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get workspace backup info
+router.get('/workspace/:workspaceId/backup-info', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    
+    const projects = await Project.findAll({ where: { workspaceId } });
+    const projectIds = projects.map(p => p.id);
+    
+    const [notesCount, vulnsCount, payloadsCount, reconCount, logsCount] = await Promise.all([
+      Note.count({ where: { projectId: projectIds } }),
+      Vulnerability.count({ where: { projectId: projectIds } }),
+      Payload.count({ where: { projectId: projectIds } }),
+      ReconData.count({ where: { projectId: projectIds } }),
+      CalendarLog.count({ where: { projectId: projectIds } }),
+    ]);
+    
+    res.json({
+      projects: projects.length,
+      notes: notesCount,
+      vulnerabilities: vulnsCount,
+      payloads: payloadsCount,
+      recon: reconCount,
+      logs: logsCount,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+===== backend/server.js =====
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { connectDB } from './config/db.js';
+
+// Routes
+import workspaceRoutes from './routes/workspaceRoutes.js';
+import projectRoutes from './routes/projectRoutes.js';
+import noteRoutes from './routes/noteRoutes.js';
+import calendarLogRoutes from './routes/calendarLogRoutes.js';
+import searchRoutes from './routes/searchRoutes.js';
+import vulnerabilityRoutes from './routes/vulnerabilityRoutes.js';
+import payloadRoutes from './routes/payloadRoutes.js';
+import reconRoutes from './routes/reconRoutes.js';
+import noteLinkRoutes from './routes/noteLinkRoutes.js';
+import templateRoutes from './routes/templateRoutes.js';
+import exportRoutes from './routes/exportRoutes.js';
+import statsRoutes from './routes/statsRoutes.js';
+import backupRoutes from './routes/backupRoutes.js';
+
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cors({
+  origin: ['http://localhost:5001', 'http://localhost:8080', 'http://localhost:8081', 'http://localhost:5000'],
+  credentials: true,
+}));
+
+// ========== SERVE FRONTEND IN PRODUCTION ==========
+if (process.env.NODE_ENV === 'production') {
+  const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+  console.log('[Server] Serving frontend from:', frontendDistPath);
+  app.use(express.static(frontendDistPath));
+}
+// =================================================
+
+// Connect to SQLite
+await connectDB();
+
+// Routes
+app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/notes', noteRoutes);
+app.use('/api/calendar-logs', calendarLogRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/vulnerabilities', vulnerabilityRoutes);
+app.use('/api/payloads', payloadRoutes);
+app.use('/api/recon', reconRoutes);
+app.use('/api/note-links', noteLinkRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/backup', backupRoutes);
+
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ========== SPA FALLBACK (MUST BE LAST) ==========
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+    }
+  });
+}
+// =================================================
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+===== backend/utils/activityLogger.js =====
+import CalendarLog from '../models/CalendarLog.js';
+import Project from '../models/Project.js';
+
+export const logActivity = async (projectId, activityType, details) => {
+  try {
+    if (!projectId) {
+      console.log("⚠️ No projectId provided, skipping activity log");
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get project name
+    let projectName = "";
+    try {
+      const project = await Project.findByPk(projectId);
+      projectName = project?.name || "";
+    } catch (err) {
+      console.log("Could not fetch project name:", err.message);
+    }
+    
+    // Use findOrCreate to handle duplicates gracefully
+    const [log, created] = await CalendarLog.findOrCreate({
+      where: { date: today, projectId: projectId },
+      defaults: {
+        date: today,
+        projectId: projectId,
+        projectName: projectName,
+        notes: "",
+        cookies: "",
+        headers: "",
+        findings: "",
+        vulnerabilities: "",
+        status: "no_progress"
+      }
+    });
+    
+    // Update project name if it changed
+    if (!created && projectName && log.projectName !== projectName) {
+      log.projectName = projectName;
+    }
+    
+    const timestamp = new Date().toLocaleTimeString();
+    const activityEntry = `[${timestamp}] ${activityType}: ${details}\n`;
+    
+    switch (activityType) {
+      case "note_created":
+      case "note_updated":
+      case "note_deleted":
+        log.notes = (log.notes || "") + activityEntry;
+        break;
+      case "vulnerability_created":
+      case "vulnerability_updated":
+      case "vulnerability_deleted":
+        log.vulnerabilities = (log.vulnerabilities || "") + activityEntry;
+        if (log.status !== "vulnerability") log.status = "vulnerability";
+        break;
+      case "payload_created":
+      case "payload_updated":
+      case "payload_deleted":
+      case "recon_created":
+      case "recon_updated":
+      case "recon_deleted":
+        log.findings = (log.findings || "") + activityEntry;
+        if (log.status === "no_progress") log.status = "findings";
+        break;
+      default:
+        log.notes = (log.notes || "") + activityEntry;
+    }
+    
+    // Update status based on content
+    if (log.status !== "vulnerability") {
+      if (log.vulnerabilities && log.vulnerabilities.trim().length > 0) {
+        log.status = "vulnerability";
+      } else if (log.findings && log.findings.trim().length > 0) {
+        log.status = "findings";
+      } else if (log.notes && log.notes.trim().length > 0) {
+        log.status = "testing";
+      }
+    }
+    
+    await log.save();
+    console.log(`✅ Logged activity for project ${projectName || projectId}: ${activityType}`);
+  } catch (error) {
+    console.error("❌ Error logging activity:", error);
+  }
+};
+
+

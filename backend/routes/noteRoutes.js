@@ -19,12 +19,18 @@ router.get('/project/:projectId', async (req, res) => {
   }
 });
 
+
+
 router.get('/:id', async (req, res) => {
   try {
     const note = await Note.findByPk(req.params.id);
-    if (!note) return res.status(404).json({ error: 'Note not found' });
+    if (!note) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+    // Return single object, not array
     res.json(withId(note));
   } catch (err) {
+    console.error('Error fetching note:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -75,6 +81,12 @@ router.put('/:projectId/:id', async (req, res) => {
 router.delete('/:projectId/:id', async (req, res) => {
   try {
     const { id, projectId } = req.params;
+    
+    // Add validation
+    if (!id || !projectId) {
+      return res.status(400).json({ error: 'Missing noteId or projectId' });
+    }
+    
     const note = await Note.findByPk(id);
     if (!note) return res.status(404).json({ error: 'Note not found' });
 

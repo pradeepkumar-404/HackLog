@@ -67,12 +67,19 @@ const ProjectPage = () => {
   const deleteProject = useDeleteProject();
   const createNote = useCreateNote();
 
-  // Fetch related data
-  const { data: notes = [] } = useProjectNotes(projectId!);
-  const { data: logs = [] } = useProjectLogs(projectId!);
-  const { data: vulns = [] } = useProjectVulnerabilities(projectId!);
-  const { data: payloads = [] } = useProjectPayloads(projectId!);
-  const { data: reconData = [] } = useProjectRecon(projectId!);
+  // Fetch related data - ensure arrays with default values
+  const { data: notes = [], isLoading: notesLoading } = useProjectNotes(projectId!);
+  const { data: logs = [], isLoading: logsLoading } = useProjectLogs(projectId!);
+  const { data: vulns = [], isLoading: vulnsLoading } = useProjectVulnerabilities(projectId!);
+  const { data: payloads = [], isLoading: payloadsLoading } = useProjectPayloads(projectId!);
+  const { data: reconData = [], isLoading: reconLoading } = useProjectRecon(projectId!);
+
+  // Ensure all data is an array (defensive)
+  const safeNotes = Array.isArray(notes) ? notes : [];
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const safeVulns = Array.isArray(vulns) ? vulns : [];
+  const safePayloads = Array.isArray(payloads) ? payloads : [];
+  const safeReconData = Array.isArray(reconData) ? reconData : [];
 
   // Scroll to highlighted item when component mounts
   useEffect(() => {
@@ -90,7 +97,8 @@ const ProjectPage = () => {
     }
   }, [highlightId, activeTab]);
 
-  if (projectLoading) {
+  // Loading state
+  if (projectLoading || notesLoading || logsLoading || vulnsLoading || payloadsLoading || reconLoading) {
     return (
       <div className="flex justify-center items-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -98,6 +106,7 @@ const ProjectPage = () => {
     );
   }
 
+  // Error state
   if (projectError || !project) {
     return (
       <div className="p-8 font-mono text-muted-foreground">
@@ -131,7 +140,7 @@ const ProjectPage = () => {
     );
   };
 
-  const projectLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
+  const projectLogs = [...safeLogs].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="p-8 max-w-7xl mx-auto animate-fade-in">
@@ -205,7 +214,7 @@ const ProjectPage = () => {
         </Card>
       </div>
 
-      {/* Target Summary Section - Shows actual counts from project data */}
+      {/* Target Summary Section */}
       <div className="mb-6 p-4 bg-gradient-primary/5 border border-primary/20 rounded-lg">
         <div className="flex items-center gap-2 mb-3">
           <Activity className="h-4 w-4 text-primary" />
@@ -214,7 +223,7 @@ const ProjectPage = () => {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono mb-3">
           <div className="bg-secondary/50 rounded p-2 text-center">
             <div className="text-muted-foreground text-[10px]">Notes</div>
-            <div className="text-xl font-bold text-primary">{notes.length}</div>
+            <div className="text-xl font-bold text-primary">{safeNotes.length}</div>
           </div>
           <div className="bg-secondary/50 rounded p-2 text-center">
             <div className="text-muted-foreground text-[10px]">Logs</div>
@@ -222,19 +231,19 @@ const ProjectPage = () => {
           </div>
           <div className="bg-secondary/50 rounded p-2 text-center">
             <div className="text-muted-foreground text-[10px]">Vulnerabilities</div>
-            <div className="text-xl font-bold text-destructive">{vulns.length}</div>
+            <div className="text-xl font-bold text-destructive">{safeVulns.length}</div>
           </div>
           <div className="bg-secondary/50 rounded p-2 text-center">
             <div className="text-muted-foreground text-[10px]">Payloads</div>
-            <div className="text-xl font-bold text-primary">{payloads.length}</div>
+            <div className="text-xl font-bold text-primary">{safePayloads.length}</div>
           </div>
           <div className="bg-secondary/50 rounded p-2 text-center">
             <div className="text-muted-foreground text-[10px]">Recon</div>
-            <div className="text-xl font-bold text-warning">{reconData.length}</div>
+            <div className="text-xl font-bold text-warning">{safeReconData.length}</div>
           </div>
         </div>
         
-        {/* Recent Activities from Notes, Vulns, Payloads, Recon */}
+        {/* Recent Activities */}
         <div className="mt-3 p-3 bg-secondary/30 rounded border border-border">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="h-3 w-3 text-muted-foreground" />
@@ -244,7 +253,7 @@ const ProjectPage = () => {
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {/* Recent Notes */}
-            {[...notes]
+            {[...safeNotes]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 2)
               .map(note => (
@@ -264,7 +273,7 @@ const ProjectPage = () => {
               ))}
             
             {/* Recent Vulnerabilities */}
-            {[...vulns]
+            {[...safeVulns]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 2)
               .map(vuln => (
@@ -284,7 +293,7 @@ const ProjectPage = () => {
               ))}
             
             {/* Recent Payloads */}
-            {[...payloads]
+            {[...safePayloads]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 2)
               .map(payload => (
@@ -304,7 +313,7 @@ const ProjectPage = () => {
               ))}
             
             {/* Recent Recon */}
-            {[...reconData]
+            {[...safeReconData]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 2)
               .map(recon => (
@@ -323,29 +332,29 @@ const ProjectPage = () => {
                 </div>
               ))}
             
-            {notes.length === 0 && vulns.length === 0 && payloads.length === 0 && reconData.length === 0 && (
+            {safeNotes.length === 0 && safeVulns.length === 0 && safePayloads.length === 0 && safeReconData.length === 0 && (
               <div className="text-[11px] text-muted-foreground font-mono text-center py-2">
                 No activity yet. Create notes, vulnerabilities, payloads, or recon data.
               </div>
             )}
           </div>
         </div>
-      </div> {/* ✅ This closing div was missing */}
+      </div>
 
-      {/* Tabs for Notes, Vulnerabilities, Payloads, Recon, Timeline */}
+      {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
         <TabsList className="mb-4">
           <TabsTrigger value="notes" className="font-mono text-xs">
-            Notes ({notes.length})
+            Notes ({safeNotes.length})
           </TabsTrigger>
           <TabsTrigger value="vulns" className="font-mono text-xs">
-            Vulnerabilities ({vulns.length})
+            Vulnerabilities ({safeVulns.length})
           </TabsTrigger>
           <TabsTrigger value="payloads" className="font-mono text-xs">
-            Payloads ({payloads.length})
+            Payloads ({safePayloads.length})
           </TabsTrigger>
           <TabsTrigger value="recon" className="font-mono text-xs">
-            Recon ({reconData.length})
+            Recon ({safeReconData.length})
           </TabsTrigger>
           <TabsTrigger value="timeline" className="font-mono text-xs">
             Timeline ({projectLogs.length})
@@ -374,12 +383,12 @@ const ProjectPage = () => {
             </Button>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {notes.length === 0 && (
+            {safeNotes.length === 0 && (
               <p className="col-span-full text-xs text-muted-foreground font-mono py-4 text-center">
                 No notes yet. Create one to start documenting.
               </p>
             )}
-            {notes.map((note: any) => (
+            {safeNotes.map((note: any) => (
               <button
                 key={note.id}
                 onClick={() => navigate(`/note/${note.id}`)}
@@ -423,12 +432,12 @@ const ProjectPage = () => {
           <ReconDataPanel projectId={project.id} />
         </TabsContent>
 
-        {/* Timeline Tab - Shows ALL activities */}
+        {/* Timeline Tab */}
         <TabsContent value="timeline">
           <div className="space-y-3">
             {(() => {
               const allActivities = [
-                ...notes.map(n => ({
+                ...safeNotes.map(n => ({
                   id: n.id,
                   type: "note",
                   title: `Created note: ${n.name}`,
@@ -437,7 +446,7 @@ const ProjectPage = () => {
                   icon: <FileText className="h-3 w-3" />,
                   color: "text-info",
                 })),
-                ...notes.map(n => ({
+                ...safeNotes.map(n => ({
                   id: n.id,
                   type: "note",
                   title: `Updated note: ${n.name}`,
@@ -445,8 +454,8 @@ const ProjectPage = () => {
                   link: `/note/${n.id}`,
                   icon: <FileText className="h-3 w-3" />,
                   color: "text-info",
-                })).filter(a => new Date(a.date).getTime() !== notes.find(n => n.id === a.id)?.createdAt),
-                ...vulns.map(v => ({
+                })).filter(a => new Date(a.date).getTime() !== safeNotes.find(n => n.id === a.id)?.createdAt),
+                ...safeVulns.map(v => ({
                   id: v.id,
                   type: "vuln",
                   title: `Added vulnerability: ${v.title}`,
@@ -455,7 +464,7 @@ const ProjectPage = () => {
                   icon: <Shield className="h-3 w-3" />,
                   color: "text-destructive",
                 })),
-                ...vulns.map(v => ({
+                ...safeVulns.map(v => ({
                   id: v.id,
                   type: "vuln",
                   title: `Updated vulnerability: ${v.title}`,
@@ -463,8 +472,8 @@ const ProjectPage = () => {
                   link: `/project/${project.id}?tab=vulns&highlight=${v.id}`,
                   icon: <Shield className="h-3 w-3" />,
                   color: "text-destructive",
-                })).filter(a => new Date(a.date).getTime() !== vulns.find(v => v.id === a.id)?.createdAt),
-                ...payloads.map(p => ({
+                })).filter(a => new Date(a.date).getTime() !== safeVulns.find(v => v.id === a.id)?.createdAt),
+                ...safePayloads.map(p => ({
                   id: p.id,
                   type: "payload",
                   title: `Added payload: ${p.name}`,
@@ -473,7 +482,7 @@ const ProjectPage = () => {
                   icon: <Package className="h-3 w-3" />,
                   color: "text-primary",
                 })),
-                ...payloads.map(p => ({
+                ...safePayloads.map(p => ({
                   id: p.id,
                   type: "payload",
                   title: `Updated payload: ${p.name}`,
@@ -481,8 +490,8 @@ const ProjectPage = () => {
                   link: `/project/${project.id}?tab=payloads&highlight=${p.id}`,
                   icon: <Package className="h-3 w-3" />,
                   color: "text-primary",
-                })).filter(a => new Date(a.date).getTime() !== payloads.find(p => p.id === a.id)?.createdAt),
-                ...reconData.map(r => ({
+                })).filter(a => new Date(a.date).getTime() !== safePayloads.find(p => p.id === a.id)?.createdAt),
+                ...safeReconData.map(r => ({
                   id: r.id,
                   type: "recon",
                   title: `Added recon: ${r.value}`,
@@ -491,7 +500,7 @@ const ProjectPage = () => {
                   icon: <Search className="h-3 w-3" />,
                   color: "text-warning",
                 })),
-                ...reconData.map(r => ({
+                ...safeReconData.map(r => ({
                   id: r.id,
                   type: "recon",
                   title: `Updated recon: ${r.value}`,
@@ -499,7 +508,7 @@ const ProjectPage = () => {
                   link: `/project/${project.id}?tab=recon&highlight=${r.id}`,
                   icon: <Search className="h-3 w-3" />,
                   color: "text-warning",
-                })).filter(a => new Date(a.date).getTime() !== reconData.find(r => r.id === a.id)?.createdAt),
+                })).filter(a => new Date(a.date).getTime() !== safeReconData.find(r => r.id === a.id)?.createdAt),
                 ...projectLogs.map(l => ({
                   id: l.id,
                   type: "log",
@@ -568,21 +577,6 @@ const ProjectPage = () => {
         isLoading={deleteProject.isPending}
       />
     </div>
-  );
-};
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const map: Record<string, { label: string; cls: string }> = {
-    none: { label: "no progress", cls: "bg-muted text-muted-foreground" },
-    testing: { label: "testing", cls: "bg-warning/20 text-warning border-warning/40" },
-    finding: { label: "finding", cls: "bg-info/20 text-info border-info/40" },
-    vuln: { label: "vuln", cls: "bg-destructive/20 text-destructive border-destructive/40" },
-  };
-  const m = map[status] ?? map.none;
-  return (
-    <Badge variant="outline" className={`h-4 px-1.5 text-[9px] font-mono uppercase ${m.cls}`}>
-      {m.label}
-    </Badge>
   );
 };
 

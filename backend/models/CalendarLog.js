@@ -1,4 +1,3 @@
-// backend/models/CalendarLog.js
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
 import Project from './Project.js';
@@ -11,8 +10,8 @@ const CalendarLog = sequelize.define('CalendarLog', {
   },
   date: {
     type: DataTypes.STRING,    // YYYY-MM-DD
-    allowNull: false,
-    unique: true
+    allowNull: false
+    // REMOVED: unique: true
   },
   notes: {
     type: DataTypes.TEXT,
@@ -33,11 +32,13 @@ const CalendarLog = sequelize.define('CalendarLog', {
       model: Project,
       key: 'id'
     },
-    onDelete: 'SET NULL'
+    onDelete: 'SET NULL',
+    field: 'project_id'  // Explicitly map to snake_case column
   },
   projectName: {
     type: DataTypes.STRING,
-    defaultValue: ''
+    defaultValue: '',
+    field: 'project_name'  // Explicitly map to snake_case column
   },
   findings: {
     type: DataTypes.TEXT,
@@ -52,7 +53,13 @@ const CalendarLog = sequelize.define('CalendarLog', {
     defaultValue: 'no_progress'
   }
 }, {
-  tableName: 'calendar_logs'
+  tableName: 'calendar_logs',
+  indexes: [
+    {
+      unique: true,
+      fields: ['date', 'project_id']  // Use snake_case column name
+    }
+  ]
 });
 
 Project.hasMany(CalendarLog, { foreignKey: 'projectId' });

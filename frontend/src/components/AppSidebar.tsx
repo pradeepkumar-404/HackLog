@@ -11,6 +11,7 @@ import {
   Trash2,
   Terminal,
   LayoutGrid,
+  Pencil,
 } from "lucide-react";
 import { useUIStore } from "@/lib/uiStore";
 import {
@@ -23,6 +24,8 @@ import {
   useDeleteProject,
   useDeleteNote,
   useDeleteWorkspace,
+  useUpdateProject,
+  useUpdateNote,
 } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,6 +41,11 @@ import { CreateWorkspaceModal } from "@/components/modals/CreateWorkspaceModal";
 import { CreateProjectModal } from "@/components/modals/CreateProjectModal";
 import { CreateNoteModal } from "@/components/modals/CreateNoteModal";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+
+import { ImportExportModal } from "@/components/modals/ImportExportModal";
+import { Database } from "lucide-react";
 
 export const AppSidebar = () => {
   const location = useLocation();
@@ -55,6 +63,8 @@ export const AppSidebar = () => {
   const deleteProject = useDeleteProject();
   const deleteNote = useDeleteNote();
   const deleteWorkspace = useDeleteWorkspace();
+  const updateProject = useUpdateProject();
+  const updateNote = useUpdateNote();
 
   console.log("📌 [AppSidebar] Workspaces loaded:", workspaces.length, workspaces);
   console.log("📌 [AppSidebar] Projects loaded:", projects.length);
@@ -67,6 +77,11 @@ export const AppSidebar = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "workspace" | "project"; id: string; name: string } | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
+
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
+
+  const [importExportModalOpen, setImportExportModalOpen] = useState(false);
 
   const activeWs = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
   
@@ -152,7 +167,12 @@ export const AppSidebar = () => {
   };
 
   const handleDeleteNote = (noteId: string, projectId: string) => {
-    console.log("🔴 [AppSidebar] Deleting note:", noteId);
+    console.log("🔴 [AppSidebar] Deleting note:", noteId, "from project:", projectId);
+    if (!noteId || !projectId) {
+      console.error("Cannot delete note: missing noteId or projectId", { noteId, projectId });
+      toast.error("Cannot delete note: missing information");
+      return;
+    }
     deleteNote.mutate({ projectId, noteId });
   };
 
@@ -165,6 +185,34 @@ export const AppSidebar = () => {
   const openDeleteProjectConfirm = (id: string, name: string) => {
     setDeleteTarget({ type: "project", id, name });
     setConfirmModalOpen(true);
+  };
+
+  const handleRenameProject = async (projectId: string, newName: string, project: any) => {
+    if (!newName.trim() || newName === project.name) {
+      setEditingProjectId(null);
+      return;
+    }
+    
+    try {
+      await updateProject.mutateAsync({
+        id: projectId,
+        data: {
+          name: newName.trim(),
+          target: project.target || "",
+          scope: project.scope || "",
+          programInfo: project.programInfo || "",
+          workspaceId: project.workspaceId,
+        },
+      });
+      toast.success(`Project renamed to "${newName.trim()}"`);
+      // Refresh the page to show updated name
+      window.location.reload();
+    } catch (err) {
+      console.error("Error renaming project:", err);
+      toast.error("Failed to rename project");
+    } finally {
+      setEditingProjectId(null);
+    }
   };
 
   return (
@@ -210,6 +258,9 @@ export const AppSidebar = () => {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setWorkspaceModalOpen(true)} className="text-xs font-mono">
                 <Plus className="h-3 w-3 mr-2" /> New workspace
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setImportExportModalOpen(true)} className="text-xs font-mono">
+                <Database className="h-3 w-3 mr-2" /> Import/Export
               </DropdownMenuItem>
               {activeWs && (
                 <DropdownMenuItem
@@ -283,7 +334,26 @@ export const AppSidebar = () => {
                       ) : (
                         <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                       )}
-                      <span className="truncate font-mono text-xs text-sidebar-foreground">{p.name}</span>
+                      {editingProjectId === p.id ? (
+                        <Input
+                          autoFocus
+                          value={editingProjectName}
+                          onChange={(e) => setEditingProjectName(e.target.value)}
+                          onBlur={() => handleRenameProject(p.id, editingProjectName, p)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleRenameProject(p.id, editingProjectName, p);
+                            } else if (e.key === "Escape") {
+                              setEditingProjectId(null);
+                            }
+                          }}
+                          className="h-6 text-xs"
+                        />
+                      ) : (
+                        <span className="truncate font-mono text-xs text-sidebar-foreground">
+                          {p.name}
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={() => {
@@ -296,9 +366,19 @@ export const AppSidebar = () => {
                       <Plus className="h-3 w-3" />
                     </button>
                     <button
+                      onClick={() => {
+                        setEditingProjectId(p.id);
+                        setEditingProjectName(p.name);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                      title="Rename project"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
                       onClick={() => openDeleteProjectConfirm(p.id, p.name)}
                       className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                      title="Delete"
+                      title="Delete project"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
@@ -352,18 +432,89 @@ export const AppSidebar = () => {
         confirmText="Delete"
         variant="danger"
       />
+
+      <ImportExportModal
+        isOpen={importExportModalOpen}
+        onClose={() => {
+          console.log("🔵 [AppSidebar] Closing Import/Export modal");
+          setImportExportModalOpen(false);
+        }}
+      />
     </>
   );
 };
 
-// Fixed ProjectNotesList component with proper array handling
+// Fixed ProjectNotesList component with proper null checks
 const ProjectNotesList = ({ projectId, onDeleteNote }: { projectId: string; onDeleteNote: (noteId: string, projectId: string) => void }) => {
-  const { data: notes, isLoading, error } = useProjectNotes(projectId);
+  const { data: notes, isLoading, error, refetch } = useProjectNotes(projectId);
   const navigate = useNavigate();
   const params = useParams();
-
+  const updateNote = useUpdateNote();
+  
+  // State for editing notes
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteName, setEditingNoteName] = useState("");
+  
   // 🔥 SAFETY CHECK: Ensure notes is always an array
   const safeNotes = Array.isArray(notes) ? notes : [];
+  
+  const handleRenameNote = async (noteId: string, newName: string) => {
+    if (!noteId || !projectId) {
+      console.error("Cannot rename note: missing noteId or projectId", { noteId, projectId });
+      toast.error("Cannot rename note: missing information");
+      setEditingNoteId(null);
+      return;
+    }
+    
+    if (!newName.trim()) {
+      setEditingNoteId(null);
+      return;
+    }
+    
+    // Find the current note to get its data
+    const currentNote = safeNotes.find((n: any) => n.id === noteId);
+    if (!currentNote) {
+      console.error("Note not found:", noteId);
+      setEditingNoteId(null);
+      return;
+    }
+    
+    if (newName.trim() === currentNote.name) {
+      setEditingNoteId(null);
+      return;
+    }
+    
+    try {
+      await updateNote.mutateAsync({
+        projectId: projectId,
+        noteId: noteId,
+        data: {
+          name: newName.trim(),
+          content: currentNote.content || "",
+          tags: currentNote.tags || [],
+          attachments: currentNote.attachments || [],
+        },
+      });
+      toast.success(`Note renamed to "${newName.trim()}"`);
+      // Refetch notes to update the list
+      await refetch();
+    } catch (err) {
+      console.error("Error renaming note:", err);
+      toast.error("Failed to rename note");
+    } finally {
+      setEditingNoteId(null);
+      setEditingNoteName("");
+    }
+  };
+  
+  const handleDeleteNoteClick = (noteId: string) => {
+    if (!noteId || !projectId) {
+      console.error("Cannot delete note: missing noteId or projectId", { noteId, projectId });
+      toast.error("Cannot delete note: missing information");
+      return;
+    }
+    onDeleteNote(noteId, projectId);
+  };
   
   // Show loading state
   if (isLoading) {
@@ -406,18 +557,53 @@ const ProjectNotesList = ({ projectId, onDeleteNote }: { projectId: string; onDe
             )}
           >
             <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <button
-              onClick={() => navigate(`/note/${note.id}`)}
-              className="flex-1 text-left truncate font-mono"
-            >
-              {note.name || "Untitled"}
-            </button>
-            <button
-              onClick={() => onDeleteNote(note.id, projectId)}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
+            
+            {editingNoteId === note.id ? (
+              <Input
+                autoFocus
+                value={editingNoteName}
+                onChange={(e) => setEditingNoteName(e.target.value)}
+                onBlur={() => handleRenameNote(note.id, editingNoteName)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleRenameNote(note.id, editingNoteName);
+                  } else if (e.key === "Escape") {
+                    setEditingNoteId(null);
+                    setEditingNoteName("");
+                  }
+                }}
+                className="h-6 text-xs flex-1"
+              />
+            ) : (
+              <button
+                onClick={() => navigate(`/note/${note.id}`)}
+                className="flex-1 text-left truncate font-mono"
+              >
+                {note.name || "Untitled"}
+              </button>
+            )}
+            
+            {editingNoteId !== note.id && (
+              <>
+                <button
+                  onClick={() => {
+                    setEditingNoteId(note.id);
+                    setEditingNoteName(note.name || "Untitled");
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                  title="Rename note"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => handleDeleteNoteClick(note.id)}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                  title="Delete note"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </>
+            )}
           </div>
         );
       })}

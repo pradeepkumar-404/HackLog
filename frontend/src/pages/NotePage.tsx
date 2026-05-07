@@ -2,7 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useNote, useUpdateNote, useDeleteNote, useProjectNotes, useProjectData } from "@/hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import {
   ChevronRight,
   Trash2,
@@ -34,7 +34,7 @@ const NotePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: note, isLoading, error } = useNote(noteId!);
+  const { data: note, isLoading, error, refetch } = useNote(noteId!);
   const updateNote = useUpdateNote();
   const deleteNote = useDeleteNote();
   const { data: projectNotes = [] } = useProjectNotes(note?.projectId || "");
@@ -64,39 +64,90 @@ const NotePage = () => {
 
   // Load note data when fetched
   useEffect(() => {
-    if (note) {
-      setTitle(note.name || "Untitled");
-      setContent(note.content || "");
-      setTags(note.tags || []);
-      setAttachments(note.attachments || []);
-      setLastSaved(new Date(note.updatedAt));
-    }
-  }, [note]);
+  console.log("📝 Note data changed:", note);
+
+  if (!note) return;
+
+  if (typeof note !== "object") {
+    console.error("❌ Invalid note type:", note);
+    return;
+  }
+
+  console.log("✅ Loading note:", {
+    id: note.id,
+    projectId: note.projectId,
+    name: note.name,
+  });
+
+  setTitle(note.name || "Untitled");
+  setContent(note.content || "");
+  setTags(Array.isArray(note.tags) ? note.tags : []);
+  setAttachments(
+    Array.isArray(note.attachments) ? note.attachments : []
+  );
+
+  const parsedDate = new Date(note.updatedAt);
+
+  if (isValid(parsedDate)) {
+    setLastSaved(parsedDate);
+  } else {
+    setLastSaved(null);
+  }
+}, [note]);
 
   const handleUpdate = useCallback(async (updates: Partial<any>) => {
-    if (!note) return;
+    if (!note || !note.id || !note.projectId) {
+      console.error("Cannot save note: missing note.id or note.projectId", { note });
+      toast.error("Cannot save note: missing information");
+      return;
+    }
     
     setIsSaving(true);
     try {
+      console.log("💾 Saving note:", { projectId: note.projectId, noteId: note.id, updates });
       await updateNote.mutateAsync(
         { projectId: note.projectId, noteId: note.id, data: updates }
       );
       setLastSaved(new Date());
-      // Show toast only for manual saves, not auto-saves
-      // toast.success("Note saved"); // ← Uncomment if you want manual save feedback
+      // Refetch to get updated data
+      await refetch();
     } catch (error) {
       console.error("Failed to save note:", error);
       toast.error("Failed to save note");
     } finally {
       setIsSaving(false);
     }
-  }, [note, updateNote]);
+  }, [note, updateNote, refetch]);
+
+  const handleDeleteNote = useCallback(() => {
+    if (!note || !note.id || !note.projectId) {
+      console.error("Cannot delete note: missing note.id or note.projectId", { note });
+      toast.error("Cannot delete note: missing information");
+      return;
+    }
+    
+    if (confirm("Delete this note?")) {
+      deleteNote.mutate(
+        { projectId: note.projectId, noteId: note.id },
+        {
+          onSuccess: () => {
+            toast.success("Note deleted successfully");
+            navigate(`/project/${note.projectId}`);
+          },
+          onError: (error) => {
+            console.error("Failed to delete note:", error);
+            toast.error("Failed to delete note");
+          }
+        }
+      );
+    }
+  }, [note, deleteNote, navigate]);
 
   // Debounced title save
   const debouncedTitleSave = useCallback((newTitle: string) => {
     if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
     titleTimeoutRef.current = setTimeout(() => {
-      if (note && newTitle !== note.name) {
+      if (note && note.id && note.projectId && newTitle !== note.name) {
         handleUpdate({ name: newTitle });
       }
     }, 1000);
@@ -106,7 +157,7 @@ const NotePage = () => {
   const debouncedContentSave = useCallback((newContent: string) => {
     if (contentTimeoutRef.current) clearTimeout(contentTimeoutRef.current);
     contentTimeoutRef.current = setTimeout(() => {
-      if (note && newContent !== note.content) {
+      if (note && note.id && note.projectId && newContent !== note.content) {
         handleUpdate({ content: newContent });
       }
     }, 1500);
@@ -116,7 +167,7 @@ const NotePage = () => {
   const debouncedTagsSave = useCallback((newTags: string[]) => {
     if (tagsTimeoutRef.current) clearTimeout(tagsTimeoutRef.current);
     tagsTimeoutRef.current = setTimeout(() => {
-      if (note && JSON.stringify(newTags) !== JSON.stringify(note.tags || [])) {
+      if (note && note.id && note.projectId && JSON.stringify(newTags) !== JSON.stringify(note.tags || [])) {
         handleUpdate({ tags: newTags });
       }
     }, 1000);
@@ -192,6 +243,7 @@ const NotePage = () => {
 
   const exportContent = `# ${title}\n\n${content}`;
 
+  // Show loading state
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -200,11 +252,27 @@ const NotePage = () => {
     );
   }
 
-  if (error || !note) {
+  // Show error state
+  if (error) {
+    console.error("Note page error:", error);
     return (
       <div className="p-8 font-mono text-muted-foreground">
-        Note not found.{" "}
-        <button onClick={() => navigate("/")} className="text-primary underline">
+        <p>Error loading note: {error.message}</p>
+        <button onClick={() => navigate("/")} className="mt-4 text-primary underline">
+          Go home
+        </button>
+      </div>
+    );
+  }
+
+  // Show not found state
+  if (!note || Array.isArray(note) || !note.id || !note.projectId) {
+    console.error("Note page: Invalid note data", { note, isArray: Array.isArray(note) });
+    return (
+      <div className="p-8 font-mono text-muted-foreground">
+        <p>Note not found or corrupted.</p>
+        <p className="text-xs mt-2">Note ID: {noteId}</p>
+        <button onClick={() => navigate("/")} className="mt-4 text-primary underline">
           Go home
         </button>
       </div>
@@ -213,7 +281,7 @@ const NotePage = () => {
 
   return (
     <div className="p-8 max-w-6xl mx-auto animate-fade-in">
-      {/* Save indicator - only shows when actually saving */}
+      {/* Save indicator */}
       {isSaving && (
         <div className="fixed bottom-4 right-4 bg-primary/10 text-primary px-3 py-1.5 rounded-md text-xs font-mono flex items-center gap-2 z-50">
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -221,8 +289,8 @@ const NotePage = () => {
         </div>
       )}
 
-      {/* Last saved indicator (optional) */}
-      {lastSaved && !isSaving && (
+      {/* Last saved indicator */}
+      {lastSaved && !isSaving && isValid(lastSaved) && (
         <div className="fixed bottom-4 right-4 text-[10px] text-muted-foreground font-mono bg-background/80 px-2 py-1 rounded-md">
           Saved {format(lastSaved, "h:mm:ss a")}
         </div>
@@ -271,16 +339,7 @@ const NotePage = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              if (confirm("Delete this note?")) {
-                deleteNote.mutate(
-                  { projectId: note.projectId, noteId: note.id },
-                  {
-                    onSuccess: () => navigate(`/project/${note.projectId}`),
-                  }
-                );
-              }
-            }}
+            onClick={handleDeleteNote}
             className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
@@ -289,10 +348,12 @@ const NotePage = () => {
       </div>
 
       <div className="text-[11px] font-mono text-muted-foreground mb-4 flex items-center gap-3">
-        {note?.updatedAt ? (
-          <span>last edited {format(new Date(note.updatedAt), "MMM d, yyyy 'at' HH:mm")}</span>
+        {note?.updatedAt && isValid(new Date(note.updatedAt)) ? (
+          <span>
+            last edited {format(new Date(note.updatedAt), "MMM d, yyyy 'at' HH:mm")}
+          </span>
         ) : (
-          <span>loading...</span>
+          <span>last edited unavailable</span>
         )}
         {attachments.length > 0 && (
           <span className="text-primary">📎 {attachments.length} attachment(s)</span>
@@ -393,7 +454,7 @@ const NotePage = () => {
       </div>
 
       {/* Note Linking */}
-      {projectNotes.length > 1 && (
+      {projectNotes && projectNotes.length > 1 && (
         <div className="mt-6 p-3 border border-border rounded-md">
           <h4 className="text-xs font-mono text-muted-foreground mb-2">Linked Notes</h4>
           <div className="flex flex-wrap gap-2">

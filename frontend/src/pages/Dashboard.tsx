@@ -159,21 +159,6 @@ const Dashboard = () => {
         </p>
       </header>
 
-      {/* Debug info - remove in production */}
-      {/* <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs font-mono">
-        <details>
-          <summary className="cursor-pointer text-yellow-400">🔍 Debug Info (click to expand)</summary>
-          <div className="mt-2 space-y-1 text-muted-foreground">
-            <p>Total Activities (Notes + Vulns + Payloads + Recon): <strong className="text-primary">{totalActivities}</strong></p>
-            <p>Notes: {allNotes.length} | Vulns: {allVulns.length} | Payloads: {allPayloads.length} | Recon: {allRecon.length}</p>
-            <p>Calendar Logs: {allLogs.length}</p>
-            <p>Active Logs (from API): <strong className="text-yellow-400">{stats?.activeLogs ?? 0}</strong></p>
-            <p>Active Logs (calculated): <strong className="text-green-400">{activeLogsCount}</strong></p>
-            <p>Stats from API: {JSON.stringify(stats, null, 2)}</p>
-          </div>
-        </details>
-      </div> */}
-
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatCard 
@@ -233,8 +218,8 @@ const Dashboard = () => {
             )}
             {recent?.notes?.map((note: any) => (
               <button
-                key={note._id}
-                onClick={() => navigate(`/note/${note._id}`)}
+                key={note._id || note.id} // ✅ Fix: Use fallback for key
+                onClick={() => navigate(`/note/${note._id || note.id}`)}
                 className="w-full flex items-center gap-3 px-2 py-2 rounded hover:bg-secondary text-left group"
               >
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -271,8 +256,8 @@ const Dashboard = () => {
             )}
             {recent?.vulnerabilities?.map((v: any) => (
               <button
-                key={v._id}
-                onClick={() => navigate(`/project/${v.projectId?._id || v.projectId}?tab=vulns&highlight=${v._id}`)}
+                key={v._id || v.id} // ✅ Fix: Use fallback for key
+                onClick={() => navigate(`/project/${v.projectId?._id || v.projectId}?tab=vulns&highlight=${v._id || v.id}`)}
                 className="w-full flex items-center gap-3 px-2 py-2 rounded hover:bg-secondary text-left group"
               >
                 <Shield className="h-3.5 w-3.5 text-destructive" />
@@ -289,44 +274,6 @@ const Dashboard = () => {
             ))}
           </div>
         </Card>
-
-        {/* Recent Logs - Full width */}
-        {/* <Card className="bg-card border-border p-4 md:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-mono text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-3.5 w-3.5" /> recent_logs ({recent?.logs?.length || 0})
-            </h2>
-            <button onClick={() => navigate("/calendar")} className="text-xs font-mono text-primary hover:underline">
-              open calendar
-            </button>
-          </div>
-          <div className="space-y-1 max-h-80 overflow-y-auto">
-            {recent?.logs?.length === 0 && (
-              <p className="text-xs text-muted-foreground font-mono py-4">No logs yet across any target.</p>
-            )}
-            {recent?.logs?.map((log: any) => {
-              const summary = log.notes?.split("\n")[0] || log.findings?.split("\n")[0] || log.vulnerabilities?.split("\n")[0] || "Log entry";
-              return (
-                <button
-                  key={log._id}
-                  onClick={() => navigate(`/calendar/${log.date}?project=${log.projectId || ""}`)}
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded hover:bg-secondary text-left group"
-                >
-                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-xs text-foreground truncate">{summary}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground flex gap-2">
-                      <span>{format(new Date(log.date), "MMM d, yyyy")}</span>
-                      <StatusDot status={log.status || "none"} />
-                      <span className="capitalize">{log.status || "none"}</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                </button>
-              );
-            })}
-          </div>
-        </Card> */}
       </div>
     </div>
   );

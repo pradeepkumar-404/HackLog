@@ -19,13 +19,12 @@ export const logActivity = async (projectId, activityType, details) => {
       console.log("Could not fetch project name:", err.message);
     }
     
-    // Find or create today's log for this project
-    let log = await CalendarLog.findOne({ where: { date: today, projectId } });
-    
-    if (!log) {
-      log = await CalendarLog.create({
+    // Use findOrCreate to handle duplicates gracefully
+    const [log, created] = await CalendarLog.findOrCreate({
+      where: { date: today, projectId: projectId },
+      defaults: {
         date: today,
-        projectId,
+        projectId: projectId,
         projectName: projectName,
         notes: "",
         cookies: "",
@@ -33,8 +32,11 @@ export const logActivity = async (projectId, activityType, details) => {
         findings: "",
         vulnerabilities: "",
         status: "no_progress"
-      });
-    } else if (projectName && log.projectName !== projectName) {
+      }
+    });
+    
+    // Update project name if it changed
+    if (!created && projectName && log.projectName !== projectName) {
       log.projectName = projectName;
     }
     
@@ -66,6 +68,7 @@ export const logActivity = async (projectId, activityType, details) => {
         log.notes = (log.notes || "") + activityEntry;
     }
     
+    // Update status based on content
     if (log.status !== "vulnerability") {
       if (log.vulnerabilities && log.vulnerabilities.trim().length > 0) {
         log.status = "vulnerability";

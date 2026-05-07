@@ -12,6 +12,8 @@ import {
   statsApi,
 } from "@/lib/api";
 
+import { backupApi } from "@/lib/api";
+
 // Helper to convert MongoDB-like id to string id and add _id
 const mapId = (item: any) => {
   const idValue = item.id ?? item._id;
@@ -55,6 +57,37 @@ export const useDeleteWorkspace = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workspaces"] }),
   });
 };
+
+// ------------------- Backup & Import/Export -------------------
+export const useExportWorkspace = () => {
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const response = await backupApi.exportWorkspace(workspaceId);
+      return response.data;
+    },
+  });
+};
+
+export const useImportWorkspace = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ data, workspaceName }: { data: any; workspaceName: string }) =>
+      backupApi.importWorkspace(data, workspaceName),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+    },
+  });
+};
+
+export const useBackupInfo = (workspaceId: string) =>
+  useQuery({
+    queryKey: ["backup-info", workspaceId],
+    queryFn: async () => {
+      const res = await backupApi.getBackupInfo(workspaceId);
+      return res.data;
+    },
+    enabled: !!workspaceId,
+  });
 
 // ------------------- Projects -------------------
 export const useProjects = (workspaceId?: string) =>
@@ -123,18 +156,82 @@ export const useProjectNotes = (projectId: string) =>
 
 export const useNote = (noteId: string) =>
   useQuery({
-    queryKey: ["notes", noteId],
+    queryKey: ["note", noteId],
+
     queryFn: async () => {
-      const res = await notesApi.getOne(noteId);
-      const note = mapId(res.data);
-      return {
-        ...note,
-        createdAt: note.createdAt ? new Date(note.createdAt) : new Date(),
-        updatedAt: note.updatedAt ? new Date(note.updatedAt) : new Date(),
-      };
+      if (!noteId) {
+        console.error("❌ useNote called without noteId");
+        return null;
+      }
+
+      try {
+        const res = await notesApi.getOne(noteId);
+
+        console.log("📝 Raw note response:", res.data);
+
+        let noteData = res.data;
+
+        // If backend accidentally returns array
+        if (Array.isArray(noteData)) {
+          console.warn("⚠️ Backend returned array instead of note object");
+
+          // Find matching note
+          const matched = noteData.find(
+            (n: any) => String(n.id || n._id) === String(noteId)
+          );
+
+          if (matched) {
+            noteData = matched;
+          } else if (noteData.length > 0) {
+            noteData = noteData[0];
+          } else {
+            return null;
+          }
+        }
+
+        // Invalid object safety
+        if (!noteData || typeof noteData !== "object") {
+          console.error("❌ Invalid note data:", noteData);
+          return null;
+        }
+
+        const note = mapId(noteData);
+
+        return {
+          ...note,
+
+          id: String(note.id),
+          projectId: String(note.projectId),
+
+          name: note.name || "Untitled",
+          content: note.content || "",
+
+          tags: Array.isArray(note.tags) ? note.tags : [],
+          attachments: Array.isArray(note.attachments)
+            ? note.attachments
+            : [],
+
+          createdAt: note.createdAt
+            ? new Date(note.createdAt)
+            : new Date(),
+
+          updatedAt: note.updatedAt
+            ? new Date(note.updatedAt)
+            : new Date(),
+        };
+      } catch (error) {
+        console.error(`❌ Failed to fetch note ${noteId}:`, error);
+        throw error;
+      }
     },
+
     enabled: !!noteId,
+
+    staleTime: 30000,
+
+    retry: 1,
   });
+
 
 export const useCreateNote = () => {
   const qc = useQueryClient();
